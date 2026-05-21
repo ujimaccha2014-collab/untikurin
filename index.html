@@ -1,55 +1,17 @@
 <!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - Ultra Smooth Video Mode</title>
-    <script src="https://cdn.jsdelivr.net/npm/jmuxer@2.0.5/dist/jmuxer.min.js"></script>
-    <style>
-        body { margin: 0; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; font-family: sans-serif; }
-        #wrapper { position: relative; width: 100vw; height: 100vh; }
-        video { width: 100%; height: 100%; object-fit: contain; }
-        #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 8px 12px; pointer-events: none; z-index: 100; font-size: 14px; }
-    </style>
-</head>
-<body>
-    <div id="status" data-tunnel="slick-cycles-lead.loca.lt">Connecting to Video Stream...</div>
-    <div id="wrapper">
-        <video id="videoPlayer" autoplay muted playsinline></video>
-    </div>
+<html>
+<body style="margin:0; background:#000;">
+    <img id="s" style="width:100vw; height:100vh; object-fit:contain;">
     <script>
-        const statusEl = document.getElementById('status');
-        const video = document.getElementById('videoPlayer');
-
-        // C#が書き換えた最新のドメインを自動で取得して接続する魔法の1行通ってくれ
-        const tunnelHost = statusEl.getAttribute('data-tunnel');
-        
-        const jmuxer = new JMuxer({
-            node: 'videoPlayer',
-            mode: 'video',
-            flushingTime: 0,
-            maxDelay: 10,
-            fps: 60,
-            debug: false
-        });
-
-        const socket = new WebSocket('wss://' + tunnelHost + '/stream');
-        socket.binaryType = 'arraybuffer';
-
-        socket.onopen = () => { statusEl.innerText = 'Connected - Full HD 60FPS Video Mode'; statusEl.style.color = '#0f0'; };
-        socket.onclose = () => { statusEl.innerText = 'Disconnected'; statusEl.style.color = '#f00'; };
-        
-        socket.onmessage = (e) => {
-            if (e.data instanceof ArrayBuffer) {
-                jmuxer.feed({ video: new Uint8Array(e.data) });
-            }
+        const img = document.getElementById('s');
+        // 🟥 ここを今のURL（slick-cycles-lead.loca.lt）に変えて！
+        const ws = new WebSocket('ws://good-peas-try.loca.lt');
+        ws.binaryType = 'blob';
+        ws.onmessage = (e) => {
+            const url = URL.createObjectURL(e.data);
+            img.src = url;
+            img.onload = () => URL.revokeObjectURL(url);
         };
-
-        // 操作信号の送信
-        video.addEventListener('mousemove', (e) => {
-            if (socket.readyState !== WebSocket.OPEN) return;
-            const r = video.getBoundingClientRect();
-            socket.send(JSON.stringify({ type: 'mousemove', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }));
-        });
     </script>
 </body>
 </html>
