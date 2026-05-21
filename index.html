@@ -40,8 +40,17 @@
     <div id="status">Connecting to Server...</div>
     <!-- tabIndexを追加してキーボードイベントを受け取れるようにする -->
     <canvas id="display" tabindex="0"></canvas>
-
+<div id="status">Connecting to Server...</div>
+<div style="position: absolute; top: 10px; left: 250px; z-index: 101;">
+    <button onclick="changeScreen(0)" style="padding: 6px 12px;">モニター 1</button>
+    <button onclick="changeScreen(1)" style="padding: 6px 12px;">モニター 2</button>
+</div>
     <script>
+        // モニター変更コマンドを送信する関数
+const changeScreen = (index) => {
+    // Xプロパティにモニターの番号を入れて送る
+    sendControl({ type: "changescreen", x: index });
+};
         const canvas = document.getElementById('display');
         const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
