@@ -45,10 +45,7 @@
         const canvas = document.getElementById('display');
         const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
-
-// index.html 内の WebSocket 作成部分
-// localhost ではなく 127.0.0.1 を指定する
-const socket = new WebSocket(`ws://${window.location.host}/stream`);
+const socket = new WebSocket('ws://127.0.0.1:5000/stream');
         socket.binaryType = "blob";
 
         // --- 画面受信 ---
