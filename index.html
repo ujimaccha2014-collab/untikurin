@@ -87,8 +87,8 @@
         const status = document.getElementById('status');
         const clipBtn = document.getElementById('clipBtn');
 
-        // 🟥 接続先をあなたのPCのIPアドレスに固定
-        const socket = new WebSocket('ws://192.168.0.37:5000/stream');
+// 🟩 前のIPアドレスの行を消して、これに書き換えてコミット＆プッシュ！
+const socket = new WebSocket('wss://thick-boxes-notice.loca.lt/stream');
         socket.binaryType = "blob";
 
         let pendingHostText = ""; // ホストから届いた最新のクリップボード文字列を保持
