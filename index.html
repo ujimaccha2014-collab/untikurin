@@ -2,26 +2,56 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - Auto Smooth</title>
-    <style>body { margin: 0; background: #111; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; } #wrapper { position: relative; max-width: 100%; max-height: 100%; } canvas { display: block; max-width: 100%; max-height: 100%; cursor: crosshair; background: #222; } #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 8px 12px; pointer-events: none; z-index: 100; font-size: 14px; } #control-panel { position: absolute; top: 10px; left: 220px; z-index: 101; display: flex; gap: 8px; } .btn { padding: 8px 14px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-weight: bold; }</style>
+    <title>NET8 Remote Desktop - Ultra Smooth Video Mode</title>
+    <script src="https://cdn.jsdelivr.net/npm/jmuxer@2.0.5/dist/jmuxer.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; font-family: sans-serif; }
+        #wrapper { position: relative; width: 100vw; height: 100vh; }
+        video { width: 100%; height: 100%; object-fit: contain; }
+        #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 8px 12px; pointer-events: none; z-index: 100; font-size: 14px; }
+    </style>
 </head>
 <body>
-    <div id="status">Connecting to twenty-cars-allow.loca.lt...</div>
-    <div id="control-panel">
-        <button class="btn" onclick="changeScreen(0)">📺 モニター 1</button>
-        <button class="btn" onclick="changeScreen(1)">📺 モニター 2</button>
+    <div id="status">Connecting to Video Stream...</div>
+    <div id="wrapper">
+        <video id="videoPlayer" autoplay muted playsinline></video>
     </div>
-    <div id="wrapper"><canvas id="display" tabindex="0"></canvas></div>
     <script>
-        const canvas = document.getElementById('display'); const ctx = canvas.getContext('2d'); const status = document.getElementById('status');
-        const socket = new WebSocket('wss://twenty-cars-allow.loca.lt/stream'); socket.binaryType = 'blob';
-        socket.onopen = () => { status.innerText = 'Connected'; status.style.color = '#0f0'; canvas.focus(); };
-        socket.onmessage = async (e) => { if (e.data instanceof Blob) { const url = URL.createObjectURL(e.data); const img = new Image(); img.onload = () => { if (canvas.width !== img.width) { canvas.width = img.width; canvas.height = img.height; } ctx.drawImage(img, 0, 0); URL.revokeObjectURL(url); }; img.src = url; } };
-        const sendControl = (d) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(d)); };
-        canvas.addEventListener('mousemove', (e) => { const r = canvas.getBoundingClientRect(); sendControl({ type: 'mousemove', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }); });
-        canvas.addEventListener('mousedown', (e) => { canvas.focus(); const r = canvas.getBoundingClientRect(); sendControl({ type: 'mousedown', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }); });
-        canvas.addEventListener('mouseup', (e) => { const r = canvas.getBoundingClientRect(); sendControl({ type: 'mouseup', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }); });
-        const changeScreen = (i) => { sendControl({ type: 'changescreen', x: i }); };
+        const status = document.getElementById('status');
+        const video = document.getElementById('videoPlayer');
+
+        // JMuxerの初期化（遅延を限界まで削る設定）
+        const jmuxer = new JMuxer({
+            node: 'videoPlayer',
+            mode: 'video',
+            flushingTime: 0,
+            maxDelay: 10,
+            fps: 60,
+            debug: false
+        });
+
+        // C#側が自動でここにWebSocketのURL（wss://〜）を埋め込みます
+        const socket = new WebSocket('wss://' + window.location.host + '/stream'); 
+        socket.binaryType = 'arraybuffer';
+
+        socket.onopen = () => { status.innerText = 'Connected - Full HD 60FPS Video Mode'; status.style.color = '#0f0'; };
+        socket.onclose = () => { status.innerText = 'Disconnected'; status.style.color = '#f00'; };
+        
+        socket.onmessage = (e) => {
+            if (e.data instanceof ArrayBuffer) {
+                // 届いた動画データをそのままプレイヤーに流し込む
+                jmuxer.feed({ video: new Uint8Array(e.data) });
+            }
+        };
+
+        // マウス座標送信（動画画面に合わせた比率計算）
+        video.addEventListener('mousemove', (e) => {
+            if (socket.readyState !== WebSocket.OPEN) return;
+            const r = video.getBoundingClientRect();
+            const x = (e.clientX - r.left) / r.width;
+            const y = (e.clientY - r.top) / r.height;
+            socket.send(JSON.stringify({ type: 'mousemove', x: x, y: y }));
+        });
     </script>
 </body>
 </html>
