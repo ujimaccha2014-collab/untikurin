@@ -2,19 +2,26 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - Ready to Connect</title>
-    <style>
-        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; font-family: sans-serif; color: #aaa; }
-        .loading-box { text-align: center; padding: 20px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; }
-        .spinner { border: 4px solid rgba(255,255,255,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #4CAF50; animation: spin 1s linear infinite; margin: 0 auto 15px; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+    <title>NET8 Remote Desktop - Auto Smooth</title>
+    <style>body { margin: 0; background: #111; overflow: hidden; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; } #wrapper { position: relative; max-width: 100%; max-height: 100%; } canvas { display: block; max-width: 100%; max-height: 100%; cursor: crosshair; background: #222; } #status { position: absolute; top: 10px; left: 10px; color: #0f0; background: rgba(0,0,0,0.7); padding: 8px 12px; pointer-events: none; z-index: 100; font-size: 14px; } #control-panel { position: absolute; top: 10px; left: 220px; z-index: 101; display: flex; gap: 8px; } .btn { padding: 8px 14px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; cursor: pointer; font-weight: bold; }</style>
 </head>
 <body>
-    <div class="loading-box">
-        <div class="spinner"></div>
-        <p>🤖 お家からの接続URLが同期されるのを待っています...</p>
-        <p style="font-size: 12px; color: #666;">（一度もお家でC#を起動していないか、現在同期中です）</p>
+    <div id="status">Connecting to twenty-cars-allow.loca.lt...</div>
+    <div id="control-panel">
+        <button class="btn" onclick="changeScreen(0)">📺 モニター 1</button>
+        <button class="btn" onclick="changeScreen(1)">📺 モニター 2</button>
     </div>
+    <div id="wrapper"><canvas id="display" tabindex="0"></canvas></div>
+    <script>
+        const canvas = document.getElementById('display'); const ctx = canvas.getContext('2d'); const status = document.getElementById('status');
+        const socket = new WebSocket('wss://twenty-cars-allow.loca.lt/stream'); socket.binaryType = 'blob';
+        socket.onopen = () => { status.innerText = 'Connected'; status.style.color = '#0f0'; canvas.focus(); };
+        socket.onmessage = async (e) => { if (e.data instanceof Blob) { const url = URL.createObjectURL(e.data); const img = new Image(); img.onload = () => { if (canvas.width !== img.width) { canvas.width = img.width; canvas.height = img.height; } ctx.drawImage(img, 0, 0); URL.revokeObjectURL(url); }; img.src = url; } };
+        const sendControl = (d) => { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(d)); };
+        canvas.addEventListener('mousemove', (e) => { const r = canvas.getBoundingClientRect(); sendControl({ type: 'mousemove', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }); });
+        canvas.addEventListener('mousedown', (e) => { canvas.focus(); const r = canvas.getBoundingClientRect(); sendControl({ type: 'mousedown', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }); });
+        canvas.addEventListener('mouseup', (e) => { const r = canvas.getBoundingClientRect(); sendControl({ type: 'mouseup', x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height }); });
+        const changeScreen = (i) => { sendControl({ type: 'changescreen', x: i }); };
+    </script>
 </body>
 </html>
