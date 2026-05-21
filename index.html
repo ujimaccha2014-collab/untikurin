@@ -45,7 +45,7 @@
         const canvas = document.getElementById('display');
         const ctx = canvas.getContext('2d');
         const status = document.getElementById('status');
-const socket = new WebSocket('ws://127.0.0.1:8888/stream'); // 8888番に繋ぐ！
+const socket = new WebSocket('ws://127.0.0.1:5000/stream'); // 8888番に繋ぐ！
         socket.binaryType = "blob";
 
         // --- 画面受信 ---
