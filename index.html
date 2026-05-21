@@ -24,7 +24,7 @@
             display: block; 
             max-width: 100%; 
             max-height: 100%; 
-            cursor: crosshair; /* カーソルは元の自然な形に戻します */
+            cursor: crosshair;
             background: #222;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
@@ -84,11 +84,11 @@
         const status = document.getElementById('status');
         const clipBtn = document.getElementById('clipBtn');
 
-        const socket = new WebSocket('wss://thick-boxes-notice.loca.lt/stream');
+        // 🟥 さっき固定したLocalTunnelのURLに直接繋ぎにいく設定！
+        const socket = new WebSocket('wss://dezaringusuru-stream.loca.lt/stream');
         socket.binaryType = "blob";
 
         let pendingHostText = "";
-        let lastMouseMoveTime = 0; // 🟥 マウス送信の間引き用タイマー
 
         socket.onmessage = async (event) => {
             if (event.data instanceof Blob) {
@@ -123,13 +123,8 @@
             }
         };
 
-        // 🟥 マウス移動イベント（間引き処理を入れてC#側のパンクを防ぐ！）
+        // マウスの連射データはC#側だけで間引くため、HTML側は自然にそのまま送信します
         canvas.addEventListener('mousemove', (e) => {
-            const now = Date.now();
-            // 30ミリ秒（1秒間に約33回）経っていない場合は送信をスキップ！
-            if (now - lastMouseMoveTime < 30) return; 
-            lastMouseMoveTime = now;
-
             const rect = canvas.getBoundingClientRect();
             const relX = (e.clientX - rect.left) / rect.width;
             const relY = (e.clientY - rect.top) / rect.height;
@@ -152,7 +147,6 @@
             sendControl({ type: "changescreen", x: index });
         };
 
-        // クリックやキーボードは間引かずに即座に送信
         canvas.addEventListener('mousedown', (e) => {
             canvas.focus();
             const rect = canvas.getBoundingClientRect();
@@ -173,7 +167,7 @@
         });
         window.addEventListener('paste', (e) => {
             const text = (e.clipboardData || window.clipboardData).getData('text');
-            if (text) sendControl({ type: "paste", data: text });
+            if (text) sendControl({ type: "paste", data: data });
         });
 
         socket.onopen = () => { status.innerText = "Connected"; status.style.color = "#0f0"; canvas.focus(); };
