@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - MultiMonitor & Clipboard</title>
+    <title>NET8 Remote Desktop - Smooth FullHD</title>
     <style>
         body { 
             margin: 0; 
@@ -15,12 +15,16 @@
             height: 100vh;
             width: 100vw;
         }
-        /* Canvasを画面中央に配置 */
+        #wrapper {
+            position: relative;
+            max-width: 100%;
+            max-height: 100%;
+        }
         canvas { 
             display: block; 
             max-width: 100%; 
             max-height: 100%; 
-            cursor: crosshair;
+            cursor: crosshair; /* カーソルは元の自然な形に戻します */
             background: #222;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
@@ -36,7 +40,6 @@
             z-index: 100;
             font-size: 14px;
         }
-        /* コントロールパネルのスタイル */
         #control-panel {
             position: absolute; 
             top: 10px; 
@@ -53,20 +56,12 @@
             border-radius: 4px;
             cursor: pointer;
             font-weight: bold;
-            transition: background 0.2s;
         }
-        .btn:hover {
-            background: #444;
-        }
-        /* クリップボード同期用の一際目立つボタン */
         #clipBtn {
             background: #ff9800;
             color: #fff;
             border: none;
-            display: none; /* 最初は非表示 */
-        }
-        #clipBtn:hover {
-            background: #e68a00;
+            display: none;
         }
     </style>
 </head>
@@ -79,7 +74,9 @@
         <button id="clipBtn" class="btn" onclick="copyHostText()">📋 ホストの文字をコピー</button>
     </div>
 
-    <canvas id="display" tabindex="0"></canvas>
+    <div id="wrapper">
+        <canvas id="display" tabindex="0"></canvas>
+    </div>
 
     <script>
         const canvas = document.getElementById('display');
@@ -87,15 +84,13 @@
         const status = document.getElementById('status');
         const clipBtn = document.getElementById('clipBtn');
 
-// 🟩 前のIPアドレスの行を消して、これに書き換えてコミット＆プッシュ！
-const socket = new WebSocket('wss://thick-boxes-notice.loca.lt/stream');
+        const socket = new WebSocket('wss://thick-boxes-notice.loca.lt/stream');
         socket.binaryType = "blob";
 
-        let pendingHostText = ""; // ホストから届いた最新のクリップボード文字列を保持
+        let pendingHostText = "";
+        let lastMouseMoveTime = 0; // 🟥 マウス送信の間引き用タイマー
 
-        // --- 1. サーバーからのデータ受信処理 ---
         socket.onmessage = async (event) => {
-            // 🟩 画面映像（バイナリ画像データ）が届いた場合
             if (event.data instanceof Blob) {
                 const url = URL.createObjectURL(event.data);
                 const img = new Image();
@@ -106,102 +101,84 @@ const socket = new WebSocket('wss://thick-boxes-notice.loca.lt/stream');
                     }
                     ctx.drawImage(img, 0, 0);
                     URL.revokeObjectURL(url);
-                    status.innerText = "Connected";
+                    status.innerText = "Connected - FullHD Stable Mode";
                 };
                 img.src = url;
             } 
-            // 🟦 ホスト側でコピーされたテキスト（JSON文字列）が届いた場合
             else if (typeof event.data === "string") {
                 try {
                     const res = JSON.parse(event.data);
                     if (res.type === "host_clipboard") {
                         pendingHostText = res.data;
-                        // ボタンを表示し、コピーされた文字の冒頭をプレビュー表示
                         clipBtn.style.display = "inline-block";
-                        clipBtn.innerText = `📋 コピー: "${pendingHostText.substring(0, 10)}${pendingHostText.length > 10 ? '...' : ''}"`;
+                        clipBtn.innerText = `📋 コピー: "${pendingHostText.substring(0, 10)}..."`;
                     }
                 } catch (e) { }
             }
         };
 
-        // --- 2. サーバーへの操作データ送信関数 ---
         const sendControl = (data) => {
             if (socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify(data));
             }
         };
 
-        // --- 3. クリップボードをローカル（学校側）に同期する関数 ---
+        // 🟥 マウス移動イベント（間引き処理を入れてC#側のパンクを防ぐ！）
+        canvas.addEventListener('mousemove', (e) => {
+            const now = Date.now();
+            // 30ミリ秒（1秒間に約33回）経っていない場合は送信をスキップ！
+            if (now - lastMouseMoveTime < 30) return; 
+            lastMouseMoveTime = now;
+
+            const rect = canvas.getBoundingClientRect();
+            const relX = (e.clientX - rect.left) / rect.width;
+            const relY = (e.clientY - rect.top) / rect.height;
+
+            if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
+                sendControl({ type: "mousemove", x: relX, y: relY });
+            }
+        });
+
         function copyHostText() {
             if (pendingHostText) {
                 navigator.clipboard.writeText(pendingHostText).then(() => {
                     status.innerText = "Synced host clipboard!";
-                    clipBtn.style.display = "none"; // 同期できたらボタンを隠す
-                }).catch(err => {
-                    console.error("Clipboard write error: ", err);
+                    clipBtn.style.display = "none";
                 });
             }
         }
 
-        // --- 4. モニター切り替え関数 ---
         const changeScreen = (index) => {
             sendControl({ type: "changescreen", x: index });
-            status.innerText = `Switching to Monitor ${index + 1}...`;
         };
 
-        // --- 5. マウス操作イベントの処理 ---
-        const handleMouse = (e, type) => {
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / rect.width;
-            const y = (e.clientY - rect.top) / rect.height;
-            
-            if (x < 0 || x > 1 || y < 0 || y > 1) return; // 範囲外は無視
-            
-            sendControl({ type: type, x: x, y: y });
-        };
-
-        canvas.addEventListener('mousemove', (e) => handleMouse(e, "mousemove"));
+        // クリックやキーボードは間引かずに即座に送信
         canvas.addEventListener('mousedown', (e) => {
-            canvas.focus(); // クリック時にCanvasにキーボードフォーカスを合わせる
-            handleMouse(e, "mousedown");
+            canvas.focus();
+            const rect = canvas.getBoundingClientRect();
+            sendControl({ type: "mousedown", x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
         });
-        canvas.addEventListener('mouseup', (e) => handleMouse(e, "mouseup"));
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // 右クリックメニューを無効化
+        canvas.addEventListener('mouseup', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            sendControl({ type: "mouseup", x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
+        });
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        // --- 6. キーボード操作イベントの処理 ---
         window.addEventListener('keydown', (e) => {
             sendControl({ type: "keydown", keyCode: e.keyCode });
-            if([9, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault(); // 誤スクロール防止
+            if([9, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault();
         });
-
         window.addEventListener('keyup', (e) => {
             sendControl({ type: "keyup", keyCode: e.keyCode });
         });
-
-        // --- 7. 操作側からの貼り付け操作 (Ctrl+V) をホストに送信 ---
         window.addEventListener('paste', (e) => {
             const text = (e.clipboardData || window.clipboardData).getData('text');
-            if (text) {
-                sendControl({ type: "paste", data: text });
-                status.innerText = "Pasted text sent to host";
-            }
+            if (text) sendControl({ type: "paste", data: text });
         });
 
-        // --- 8. 接続状態インジケータ ---
-        socket.onopen = () => {
-            status.innerText = "Connected";
-            status.style.color = "#0f0";
-            canvas.focus();
-        };
-        socket.onclose = () => {
-            status.innerText = "Disconnected";
-            status.style.color = "#f00";
-            clipBtn.style.display = "none";
-        };
-        socket.onerror = () => {
-            status.innerText = "Connection Error";
-            status.style.color = "#f00";
-        };
+        socket.onopen = () => { status.innerText = "Connected"; status.style.color = "#0f0"; canvas.focus(); };
+        socket.onclose = () => { status.innerText = "Disconnected"; status.style.color = "#f00"; clipBtn.style.display = "none"; };
+        socket.onerror = () => { status.innerText = "Connection Error"; status.style.color = "#f00"; };
     </script>
 </body>
 </html>
