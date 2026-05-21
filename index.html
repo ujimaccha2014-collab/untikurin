@@ -2,177 +2,19 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - Smooth FullHD</title>
+    <title>NET8 Remote Desktop - Ready to Connect</title>
     <style>
-        body { 
-            margin: 0; 
-            background: #111; 
-            overflow: hidden; 
-            font-family: sans-serif; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            width: 100vw;
-        }
-        #wrapper {
-            position: relative;
-            max-width: 100%;
-            max-height: 100%;
-        }
-        canvas { 
-            display: block; 
-            max-width: 100%; 
-            max-height: 100%; 
-            cursor: crosshair;
-            background: #222;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        }
-        #status { 
-            position: absolute; 
-            top: 10px; 
-            left: 10px; 
-            color: #0f0; 
-            background: rgba(0,0,0,0.7); 
-            padding: 8px 12px; 
-            pointer-events: none;
-            border-radius: 4px;
-            z-index: 100;
-            font-size: 14px;
-        }
-        #control-panel {
-            position: absolute; 
-            top: 10px; 
-            left: 220px; 
-            z-index: 101;
-            display: flex;
-            gap: 8px;
-        }
-        .btn {
-            padding: 8px 14px;
-            background: #333;
-            color: #fff;
-            border: 1px solid #555;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        #clipBtn {
-            background: #ff9800;
-            color: #fff;
-            border: none;
-            display: none;
-        }
+        body { margin: 0; background: #111; display: flex; justify-content: center; align-items: center; height: 100vh; width: 100vw; font-family: sans-serif; color: #aaa; }
+        .loading-box { text-align: center; padding: 20px; border: 1px solid #333; border-radius: 8px; background: #1a1a1a; }
+        .spinner { border: 4px solid rgba(255,255,255,0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #4CAF50; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div id="status">Connecting to Server...</div>
-    
-    <div id="control-panel">
-        <button class="btn" onclick="changeScreen(0)">📺 モニター 1</button>
-        <button class="btn" onclick="changeScreen(1)">📺 モニター 2</button>
-        <button id="clipBtn" class="btn" onclick="copyHostText()">📋 ホストの文字をコピー</button>
+    <div class="loading-box">
+        <div class="spinner"></div>
+        <p>🤖 お家からの接続URLが同期されるのを待っています...</p>
+        <p style="font-size: 12px; color: #666;">（一度もお家でC#を起動していないか、現在同期中です）</p>
     </div>
-
-    <div id="wrapper">
-        <canvas id="display" tabindex="0"></canvas>
-    </div>
-
-    <script>
-        const canvas = document.getElementById('display');
-        const ctx = canvas.getContext('2d');
-        const status = document.getElementById('status');
-        const clipBtn = document.getElementById('clipBtn');
-
-        // 🟥 さっき固定したLocalTunnelのURLに直接繋ぎにいく設定！
-        const socket = new WebSocket('wss://dezaringusuru-stream.loca.lt/stream');
-        socket.binaryType = "blob";
-
-        let pendingHostText = "";
-
-        socket.onmessage = async (event) => {
-            if (event.data instanceof Blob) {
-                const url = URL.createObjectURL(event.data);
-                const img = new Image();
-                img.onload = () => {
-                    if (canvas.width !== img.width) {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                    }
-                    ctx.drawImage(img, 0, 0);
-                    URL.revokeObjectURL(url);
-                    status.innerText = "Connected - FullHD Stable Mode";
-                };
-                img.src = url;
-            } 
-            else if (typeof event.data === "string") {
-                try {
-                    const res = JSON.parse(event.data);
-                    if (res.type === "host_clipboard") {
-                        pendingHostText = res.data;
-                        clipBtn.style.display = "inline-block";
-                        clipBtn.innerText = `📋 コピー: "${pendingHostText.substring(0, 10)}..."`;
-                    }
-                } catch (e) { }
-            }
-        };
-
-        const sendControl = (data) => {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(data));
-            }
-        };
-
-        // マウスの連射データはC#側だけで間引くため、HTML側は自然にそのまま送信します
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const relX = (e.clientX - rect.left) / rect.width;
-            const relY = (e.clientY - rect.top) / rect.height;
-
-            if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
-                sendControl({ type: "mousemove", x: relX, y: relY });
-            }
-        });
-
-        function copyHostText() {
-            if (pendingHostText) {
-                navigator.clipboard.writeText(pendingHostText).then(() => {
-                    status.innerText = "Synced host clipboard!";
-                    clipBtn.style.display = "none";
-                });
-            }
-        }
-
-        const changeScreen = (index) => {
-            sendControl({ type: "changescreen", x: index });
-        };
-
-        canvas.addEventListener('mousedown', (e) => {
-            canvas.focus();
-            const rect = canvas.getBoundingClientRect();
-            sendControl({ type: "mousedown", x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
-        });
-        canvas.addEventListener('mouseup', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            sendControl({ type: "mouseup", x: (e.clientX - rect.left) / rect.width, y: (e.clientY - rect.top) / rect.height });
-        });
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        window.addEventListener('keydown', (e) => {
-            sendControl({ type: "keydown", keyCode: e.keyCode });
-            if([9, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault();
-        });
-        window.addEventListener('keyup', (e) => {
-            sendControl({ type: "keyup", keyCode: e.keyCode });
-        });
-        window.addEventListener('paste', (e) => {
-            const text = (e.clipboardData || window.clipboardData).getData('text');
-            if (text) sendControl({ type: "paste", data: data });
-        });
-
-        socket.onopen = () => { status.innerText = "Connected"; status.style.color = "#0f0"; canvas.focus(); };
-        socket.onclose = () => { status.innerText = "Disconnected"; status.style.color = "#f00"; clipBtn.style.display = "none"; };
-        socket.onerror = () => { status.innerText = "Connection Error"; status.style.color = "#f00"; };
-    </script>
 </body>
 </html>
