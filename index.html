@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - MultiMonitor & Clipboard</title>
+    <title>NET8 Remote Desktop - MultiMonitor & Clipboard (No-WS Version)</title>
     <style>
         body { 
             margin: 0; 
@@ -15,7 +15,6 @@
             height: 100vh;
             width: 100vw;
         }
-        /* Canvasを画面中央に配置 */
         canvas { 
             display: block; 
             max-width: 100%; 
@@ -36,7 +35,6 @@
             z-index: 100;
             font-size: 14px;
         }
-        /* コントロールパネルのスタイル */
         #control-panel {
             position: absolute; 
             top: 10px; 
@@ -58,12 +56,11 @@
         .btn:hover {
             background: #444;
         }
-        /* クリップボード同期用の一際目立つボタン */
         #clipBtn {
             background: #ff9800;
             color: #fff;
             border: none;
-            display: none; /* 最初は非表示 */
+            display: none;
         }
         #clipBtn:hover {
             background: #e68a00;
@@ -87,98 +84,118 @@
         const status = document.getElementById('status');
         const clipBtn = document.getElementById('clipBtn');
 
-        // 🟥 接続先をあなたのPCのIPアドレスに固定
-        const socket = new WebSocket('wss://dezaringusuru-stream.loca.lt');
-        socket.binaryType = "blob";
+        // 🟩 手動起動したLocalTunnelのURL（末尾のスラッシュは無しにする）
+        const baseUrl = 'https://dezaringusuru-stream.loca.lt';
+        
+        let pendingHostText = ""; 
 
-        let pendingHostText = ""; // ホストから届いた最新のクリップボード文字列を保持
+        // --- 1. WebSocketの代わりに普通のHTTPで画像をループ取得 ---
+        function updateStream() {
+            const img = new Image();
+            // キャッシュ対策にタイムスタンプを付与
+            const url = `${baseUrl}/screenshot?t=${Date.now()}`;
+            
+            img.onload = () => {
+                if (canvas.width !== img.width) {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                }
+                ctx.drawImage(img, 0, 0);
+                status.innerText = "Connected";
+                status.style.color = "#0f0";
+                
+                // 画像が読み込めたら、すぐ次の画像を要求して超高速パラパラマンガ
+                setTimeout(updateStream, 30);
+                
+                // ついでにテキストデータ（クリップボードなど）も定期的に引っ張ってくる
+                checkClipboard();
+            };
+            
+            img.onerror = () => {
+                status.innerText = "Connection Error (Retrying...)";
+                status.style.color = "#f00";
+                setTimeout(updateStream, 500); // エラー時は少し待って再試行
+            };
+            
+            img.src = url;
+        }
 
-        // --- 1. サーバーからのデータ受信処理 ---
-        socket.onmessage = async (event) => {
-            // 🟩 画面映像（バイナリ画像データ）が届いた場合
-            if (event.data instanceof Blob) {
-                const url = URL.createObjectURL(event.data);
-                const img = new Image();
-                img.onload = () => {
-                    if (canvas.width !== img.width) {
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                    }
-                    ctx.drawImage(img, 0, 0);
-                    URL.revokeObjectURL(url);
-                    status.innerText = "Connected";
-                };
-                img.src = url;
-            } 
-            // 🟦 ホスト側でコピーされたテキスト（JSON文字列）が届いた場合
-            else if (typeof event.data === "string") {
-                try {
-                    const res = JSON.parse(event.data);
-                    if (res.type === "host_clipboard") {
-                        pendingHostText = res.data;
-                        // ボタンを表示し、コピーされた文字の冒頭をプレビュー表示
+        // --- 2. 定期的にホストのクリップボード文字列を確認する関数 ---
+        async function checkClipboard() {
+            try {
+                const res = await fetch(`${baseUrl}/clipboard`);
+                if (res.ok) {
+                    const text = await res.text();
+                    if (text && text !== pendingHostText) {
+                        pendingHostText = text;
                         clipBtn.style.display = "inline-block";
                         clipBtn.innerText = `📋 コピー: "${pendingHostText.substring(0, 10)}${pendingHostText.length > 10 ? '...' : ''}"`;
                     }
-                } catch (e) { }
-            }
-        };
+                }
+            } catch (e) {}
+        }
 
-        // --- 2. サーバーへの操作データ送信関数 ---
-        const sendControl = (data) => {
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(data));
+        // --- 3. サーバーへの操作データ送信（Fetch APIを使用） ---
+        async function sendControl(data) {
+            try {
+                await fetch(`${baseUrl}/control`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+            } catch (e) {
+                console.error("Control send error:", e);
             }
-        };
+        }
 
-        // --- 3. クリップボードをローカル（学校側）に同期する関数 ---
+        // --- 4. クリップボードをローカル側に同期 ---
         function copyHostText() {
             if (pendingHostText) {
                 navigator.clipboard.writeText(pendingHostText).then(() => {
                     status.innerText = "Synced host clipboard!";
-                    clipBtn.style.display = "none"; // 同期できたらボタンを隠す
+                    clipBtn.style.display = "none";
                 }).catch(err => {
                     console.error("Clipboard write error: ", err);
                 });
             }
         }
 
-        // --- 4. モニター切り替え関数 ---
+        // --- 5. モニター切り替え ---
         const changeScreen = (index) => {
             sendControl({ type: "changescreen", x: index });
             status.innerText = `Switching to Monitor ${index + 1}...`;
         };
 
-        // --- 5. マウス操作イベントの処理 ---
+        // --- 6. マウス操作イベント ---
         const handleMouse = (e, type) => {
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) / rect.width;
             const y = (e.clientY - rect.top) / rect.height;
             
-            if (x < 0 || x > 1 || y < 0 || y > 1) return; // 範囲外は無視
+            if (x < 0 || x > 1 || y < 0 || y > 1) return; 
             
             sendControl({ type: type, x: x, y: y });
         };
 
         canvas.addEventListener('mousemove', (e) => handleMouse(e, "mousemove"));
         canvas.addEventListener('mousedown', (e) => {
-            canvas.focus(); // クリック時にCanvasにキーボードフォーカスを合わせる
+            canvas.focus();
             handleMouse(e, "mousedown");
         });
         canvas.addEventListener('mouseup', (e) => handleMouse(e, "mouseup"));
-        canvas.addEventListener('contextmenu', (e) => e.preventDefault()); // 右クリックメニューを無効化
+        canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        // --- 6. キーボード操作イベントの処理 ---
+        // --- 7. キーボード操作イベント ---
         window.addEventListener('keydown', (e) => {
             sendControl({ type: "keydown", keyCode: e.keyCode });
-            if([9, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault(); // 誤スクロール防止
+            if([9, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault();
         });
 
         window.addEventListener('keyup', (e) => {
             sendControl({ type: "keyup", keyCode: e.keyCode });
         });
 
-        // --- 7. 操作側からの貼り付け操作 (Ctrl+V) をホストに送信 ---
+        // --- 8. 貼り付け操作 (Ctrl+V) ---
         window.addEventListener('paste', (e) => {
             const text = (e.clipboardData || window.clipboardData).getData('text');
             if (text) {
@@ -187,21 +204,9 @@
             }
         });
 
-        // --- 8. 接続状態インジケータ ---
-        socket.onopen = () => {
-            status.innerText = "Connected";
-            status.style.color = "#0f0";
-            canvas.focus();
-        };
-        socket.onclose = () => {
-            status.innerText = "Disconnected";
-            status.style.color = "#f00";
-            clipBtn.style.display = "none";
-        };
-        socket.onerror = () => {
-            status.innerText = "Connection Error";
-            status.style.color = "#f00";
-        };
+        // 配信スタート
+        updateStream();
+        canvas.focus();
     </script>
 </body>
 </html>
