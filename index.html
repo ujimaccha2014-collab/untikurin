@@ -88,7 +88,7 @@
         const clipBtn = document.getElementById('clipBtn');
 
         // 🟥 接続先をあなたのPCのIPアドレスに固定
-        const socket = new WebSocket('ws://dezaringusuru-stream.loca.lt');
+        const socket = new WebSocket('wss://dezaringusuru-stream.loca.lt');
         socket.binaryType = "blob";
 
         let pendingHostText = ""; // ホストから届いた最新のクリップボード文字列を保持
