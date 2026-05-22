@@ -1,27 +1,16 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset='UTF-8'>
-    <title>High Quality 60FPS Stream</title>
-    <script src='https://cdn.jsdelivr.net/npm/jmuxer@2.0.5/dist/jmuxer.min.js'></script>
-</head>
+<head><meta charset='UTF-8'></head>
 <body style='margin:0;background:#000;overflow:hidden;'>
-    <video id='player' autoplay muted playsinline style='width:100vw;height:100vh;object-fit:contain;'></video>
+    <img id='v' style='width:100vw;height:100vh;object-fit:contain;'>
     <script>
-        const jmuxer = new JMuxer({
-            node: 'player',
-            mode: 'video',
-            flushingTime: 0,
-            maxDelay: 10,
-            fps: 60,
-            debug: false
-        });
-        const ws = new WebSocket('wss://shy-ducks-bet.loca.lt/stream');
-        ws.binaryType = 'arraybuffer';
+        const img = document.getElementById('v');
+        const ws = new WebSocket('wss://code-usb-knowledge-lover.trycloudflare.com/stream');
+        ws.binaryType = 'blob';
         ws.onmessage = (e) => {
-            if (e.data instanceof ArrayBuffer) {
-                jmuxer.feed({ video: new Uint8Array(e.data) });
-            }
+            const url = URL.createObjectURL(e.data);
+            img.src = url;
+            img.onload = () => URL.revokeObjectURL(url);
         };
     </script>
 </body>
