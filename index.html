@@ -1,16 +1,27 @@
 <!DOCTYPE html>
 <html>
-<body style="margin:0; background:#000;">
-    <img id="s" style="width:100vw; height:100vh; object-fit:contain;">
+<head>
+    <meta charset='UTF-8'>
+    <title>60FPS Stream</title>
+    <script src='https://cdn.jsdelivr.net/npm/jmuxer@2.0.5/dist/jmuxer.min.js'></script>
+</head>
+<body style='margin:0;background:#000;overflow:hidden;'>
+    <video id='player' autoplay muted playsinline style='width:100vw;height:100vh;object-fit:contain;'></video>
     <script>
-        const img = document.getElementById('s');
-        // 🟥 ここを今のURL（slick-cycles-lead.loca.lt）に変えて！
-        const ws = new WebSocket('ws://good-peas-try.loca.lt');
-        ws.binaryType = 'blob';
+        const jmuxer = new JMuxer({
+            node: 'player',
+            mode: 'video',
+            flushingTime: 0,
+            maxDelay: 10,
+            fps: 60,
+            debug: false
+        });
+        const ws = new WebSocket('wss://tender-teams-mate.loca.lt/stream');
+        ws.binaryType = 'arraybuffer';
         ws.onmessage = (e) => {
-            const url = URL.createObjectURL(e.data);
-            img.src = url;
-            img.onload = () => URL.revokeObjectURL(url);
+            if (e.data instanceof ArrayBuffer) {
+                jmuxer.feed({ video: new Uint8Array(e.data) });
+            }
         };
     </script>
 </body>
