@@ -1,15 +1,40 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset='UTF-8'><title>Local Stream</title></head>
+<head><meta charset='UTF-8'><title>Hybrid Stream</title></head>
 <body style='margin:0;background:#000;overflow:hidden;'>
     <img id='v' style='width:100vw;height:100vh;object-fit:contain;'>
     <script>
         const img = document.getElementById('v');
-        function updateImage() {
-            img.src = 'http://localhost:5000/screenshot?t=' + Date.now();
+        
+        // 判定用のURLを2つ用意
+        const localTarget = 'http://localhost:5000/screenshot';
+        const cloudflareTarget = 'https://forget-advice-invited-ppm.trycloudflare.com/screenshot';
+        
+        // デフォルトはCloudflare（外用）にしておく
+        let currentTarget = cloudflareTarget;
+
+        // 💡 もしブラウザのURLが「localhost」だったら、お家モードに強制切り替え
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            currentTarget = localTarget;
         }
-        img.onload = () => { setTimeout(updateImage, 30); };
-        img.onerror = () => { setTimeout(updateImage, 500); };
+
+        function updateImage() {
+            img.src = currentTarget + '?t=' + Date.now();
+        }
+
+        img.onload = () => { 
+            setTimeout(updateImage, 30); 
+        };
+
+        // 💡 もしCloudflareで1033等のエラーが出たら、自動的にお家内通信（local）に切り替えて救済する仕組み
+        img.onerror = () => { 
+            if (currentTarget === cloudflareTarget) {
+                console.log('Cloudflare通信エラーのため、Local通信に切り替えます...');
+                currentTarget = localTarget;
+            }
+            setTimeout(updateImage, 500); 
+        };
+
         updateImage();
     </script>
 </body>
