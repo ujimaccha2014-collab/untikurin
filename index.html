@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>NET8 Remote Desktop - MultiMonitor & Clipboard (No-WS Version)</title>
+    <title>NET8 Remote Desktop - MultiMonitor & Clipboard (No-WS Fast Version)</title>
     <style>
         body { 
             margin: 0; 
@@ -84,15 +84,14 @@
         const status = document.getElementById('status');
         const clipBtn = document.getElementById('clipBtn');
 
-        // 🟩 手動起動したLocalTunnelのURL（末尾のスラッシュは無しにする）
+        // 🟩 手動起動したLocalTunnelのURL（末尾のスラッシュは無し）
         const baseUrl = 'https://dezaringusuru-stream.loca.lt';
         
         let pendingHostText = ""; 
 
-        // --- 1. WebSocketの代わりに普通のHTTPで画像をループ取得 ---
+        // --- 1. 画像の定期ループ取得 ---
         function updateStream() {
             const img = new Image();
-            // キャッシュ対策にタイムスタンプを付与
             const url = `${baseUrl}/screenshot?t=${Date.now()}`;
             
             img.onload = () => {
@@ -104,24 +103,21 @@
                 status.innerText = "Connected";
                 status.style.color = "#0f0";
                 
-                // 画像が読み込めたら、すぐ次の画像を要求して超高速パラパラマンガ
-                setTimeout(updateStream, 30);
-                
-                // ついでにテキストデータ（クリップボードなど）も定期的に引っ張ってくる
-                checkClipboard();
+                // C#側が軽量化されてるから、届いたらすぐ次の画像をリクエスト
+                setTimeout(updateStream, 20);
             };
             
             img.onerror = () => {
                 status.innerText = "Connection Error (Retrying...)";
                 status.style.color = "#f00";
-                setTimeout(updateStream, 500); // エラー時は少し待って再試行
+                setTimeout(updateStream, 500);
             };
             
             img.src = url;
         }
 
-        // --- 2. 定期的にホストのクリップボード文字列を確認する関数 ---
-        async function checkClipboard() {
+        // 定期的にクリップボードを取得（1秒ごとにして負荷を削減）
+        setInterval(async () => {
             try {
                 const res = await fetch(`${baseUrl}/clipboard`);
                 if (res.ok) {
@@ -133,14 +129,16 @@
                     }
                 }
             } catch (e) {}
-        }
+        }, 1000);
 
-        // --- 3. サーバーへの操作データ送信（Fetch APIを使用） ---
+        // --- 2. 💡【超重要】通信の渋滞（OPTIONS）を起こさせない送信関数 ---
         async function sendControl(data) {
             try {
+                // Content-Typeをあえて「text/plain」にすることで、
+                // ブラウザに「確認用の予備通信（OPTIONS）」を走らせず、直接POSTをぶち込んでサクサクにします！
                 await fetch(`${baseUrl}/control`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(data)
                 });
             } catch (e) {
@@ -148,7 +146,7 @@
             }
         }
 
-        // --- 4. クリップボードをローカル側に同期 ---
+        // --- 3. クリップボード同期 ---
         function copyHostText() {
             if (pendingHostText) {
                 navigator.clipboard.writeText(pendingHostText).then(() => {
@@ -160,13 +158,13 @@
             }
         }
 
-        // --- 5. モニター切り替え ---
+        // --- 4. モニター切り替え ---
         const changeScreen = (index) => {
             sendControl({ type: "changescreen", x: index });
             status.innerText = `Switching to Monitor ${index + 1}...`;
         };
 
-        // --- 6. マウス操作イベント ---
+        // --- 5. マウス操作イベント ---
         const handleMouse = (e, type) => {
             const rect = canvas.getBoundingClientRect();
             const x = (e.clientX - rect.left) / rect.width;
@@ -185,7 +183,7 @@
         canvas.addEventListener('mouseup', (e) => handleMouse(e, "mouseup"));
         canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        // --- 7. キーボード操作イベント ---
+        // --- 6. キーボード操作イベント ---
         window.addEventListener('keydown', (e) => {
             sendControl({ type: "keydown", keyCode: e.keyCode });
             if([9, 37, 38, 39, 40].includes(e.keyCode)) e.preventDefault();
@@ -195,7 +193,7 @@
             sendControl({ type: "keyup", keyCode: e.keyCode });
         });
 
-        // --- 8. 貼り付け操作 (Ctrl+V) ---
+        // --- 7. 貼り付け操作 (Ctrl+V) ---
         window.addEventListener('paste', (e) => {
             const text = (e.clipboardData || window.clipboardData).getData('text');
             if (text) {
