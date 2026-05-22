@@ -1,23 +1,28 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset='UTF-8'></head>
-<body style='margin:0;background:#000;'>
-    <img id='v' style='width:100vw;height:100vh;object-fit:contain;'>
+<head>
+    <meta charset='UTF-8'>
+    <title>High Quality 60FPS Stream</title>
+    <script src='https://cdn.jsdelivr.net/npm/jmuxer@2.0.5/dist/jmuxer.min.js'></script>
+</head>
+<body style='margin:0;background:#000;overflow:hidden;'>
+    <video id='player' autoplay muted playsinline style='width:100vw;height:100vh;object-fit:contain;'></video>
     <script>
-        const img = document.getElementById('v');
-        function connect(protocol) {
-            console.log(protocol + ' で接続テスト中...');
-            const ws = new WebSocket(protocol + '://long-files-do.loca.lt/stream');
-            ws.binaryType = 'blob';
-            ws.onmessage = (e) => { img.src = URL.createObjectURL(e.data); };
-            ws.onopen = () => { console.log(protocol + ' で接続成功！'); };
-            ws.onerror = () => {
-                if (protocol === 'wss') {
-                    connect('ws'); // wssがダメなら自動でwsに切り替える
-                }
-            };
-        }
-        connect('wss'); // まずは安全な方からスタート
+        const jmuxer = new JMuxer({
+            node: 'player',
+            mode: 'video',
+            flushingTime: 0,
+            maxDelay: 10,
+            fps: 60,
+            debug: false
+        });
+        const ws = new WebSocket('wss://shy-ducks-bet.loca.lt/stream');
+        ws.binaryType = 'arraybuffer';
+        ws.onmessage = (e) => {
+            if (e.data instanceof ArrayBuffer) {
+                jmuxer.feed({ video: new Uint8Array(e.data) });
+            }
+        };
     </script>
 </body>
 </html>
