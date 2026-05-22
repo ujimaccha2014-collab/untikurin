@@ -1,17 +1,16 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset='UTF-8'></head>
+<head><meta charset='UTF-8'><title>Local Stream</title></head>
 <body style='margin:0;background:#000;overflow:hidden;'>
     <img id='v' style='width:100vw;height:100vh;object-fit:contain;'>
     <script>
         const img = document.getElementById('v');
-        const ws = new WebSocket('wss://code-usb-knowledge-lover.trycloudflare.com/stream');
-        ws.binaryType = 'blob';
-        ws.onmessage = (e) => {
-            const url = URL.createObjectURL(e.data);
-            img.src = url;
-            img.onload = () => URL.revokeObjectURL(url);
-        };
+        function updateImage() {
+            img.src = 'http://localhost:5000/screenshot?t=' + Date.now();
+        }
+        img.onload = () => { setTimeout(updateImage, 30); };
+        img.onerror = () => { setTimeout(updateImage, 500); };
+        updateImage();
     </script>
 </body>
 </html>
